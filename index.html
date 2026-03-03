@@ -196,6 +196,21 @@
     opacity: 0.75;
   }
 
+  .field-card.compact {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 8px 18px;
+  }
+  .field-card.compact .field-header {
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
+  .field-card.compact .field-value {
+    flex: 1;
+    text-align: right;
+  }
+
   .field-header {
     display: flex;
     align-items: center;
@@ -1064,15 +1079,21 @@ function renderApplicant() {
   view.querySelectorAll('textarea.field-textarea').forEach(autoResize);
 }
 
+function isShortValue(val) {
+  if (!val) return true;
+  return val.length <= 80 && !val.includes('\n') && !/^https?:\/\//i.test(val.trim());
+}
+
 function renderFieldCard(col, value, rowIdx) {
   const val = (value || '').toString();
-  const cssClass = col.type === 'readonly' ? '' :
-                   col.type === 'editable-mine' ? 'editable-mine' :
-                   col.type === 'editable-shared' ? 'editable-shared' :
-                   'readonly-reviewer';
+  const typeClass = col.type === 'readonly' ? '' :
+                    col.type === 'editable-mine' ? 'editable-mine' :
+                    col.type === 'editable-shared' ? 'editable-shared' :
+                    'readonly-reviewer';
 
   const isEditable = col.type === 'editable-mine' || col.type === 'editable-shared';
   const filterActive = filters[col.index] ? 'active' : '';
+  const compact = !isEditable && isShortValue(val) ? 'compact' : '';
 
   let ownerHtml = '';
   if (col.type === 'editable-mine') ownerHtml = `<span class="field-owner">Your column</span>`;
@@ -1088,7 +1109,7 @@ function renderFieldCard(col, value, rowIdx) {
     bodyHtml = renderCellValue(val);
   }
 
-  return `<div class="field-card ${cssClass}">
+  return `<div class="field-card ${typeClass} ${compact}">
     <div class="field-header">
       <span>
         <span class="field-label">${escHtml(col.name)}</span>
