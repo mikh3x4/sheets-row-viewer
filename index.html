@@ -925,10 +925,17 @@ function openFilterPopover(colIdx, buttonEl) {
   const distinctValues = Object.keys(valueCounts).sort();
   const existingFilter = filters[colIdx];
 
+  const searchCurrent = existingFilter?.type === 'search' ? existingFilter.value : '';
+  let html = `<h4>Filter: ${escHtml(col.name)}</h4>`;
+  html += `<input type="text" id="filter-search-input" value="${escAttr(searchCurrent)}" placeholder="Text search..." style="margin-bottom:8px;">`;
+  html += `<div class="filter-actions" style="margin-top:0;margin-bottom:8px;">
+    <button onclick="clearSearchFilter(${colIdx})">Clear</button>
+    <button class="apply" onclick="applySearchFilter(${colIdx})">Apply text filter</button>
+  </div>`;
+
   if (distinctValues.length <= 20) {
-    // Checklist mode
     const selectedValues = existingFilter?.type === 'checklist' ? new Set(existingFilter.values) : null;
-    let html = `<h4>Filter: ${escHtml(col.name)}</h4>`;
+    html += `<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px;">`;
     html += `<label><input type="checkbox" data-val="__empty__" ${selectedValues ? (selectedValues.has('__empty__') ? 'checked' : '') : 'checked'}> (empty) <span style="color:#999">(${emptyCount})</span></label>`;
     for (const v of distinctValues) {
       const checked = selectedValues ? (selectedValues.has(v) ? 'checked' : '') : 'checked';
@@ -937,20 +944,10 @@ function openFilterPopover(colIdx, buttonEl) {
     html += `<div class="filter-actions">
       <button onclick="filterSelectAll(${colIdx}, this)">All</button>
       <button onclick="filterSelectNone(${colIdx}, this)">None</button>
-      <button class="apply" onclick="applyChecklistFilter(${colIdx})">Apply</button>
-    </div>`;
-    pop.innerHTML = html;
-  } else {
-    // Search mode
-    const current = existingFilter?.type === 'search' ? existingFilter.value : '';
-    pop.innerHTML = `<h4>Filter: ${escHtml(col.name)}</h4>
-      <p style="font-size:12px;color:#999;margin-bottom:8px">${distinctValues.length} distinct values — use text search</p>
-      <input type="text" id="filter-search-input" value="${escAttr(current)}" placeholder="Type to filter...">
-      <div class="filter-actions">
-        <button onclick="clearSearchFilter(${colIdx})">Clear</button>
-        <button class="apply" onclick="applySearchFilter(${colIdx})">Apply</button>
-      </div>`;
+      <button class="apply" onclick="applyChecklistFilter(${colIdx})">Apply checklist</button>
+    </div></div>`;
   }
+  pop.innerHTML = html;
 }
 
 function filterSelectAll(colIdx, btn) {
