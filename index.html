@@ -845,14 +845,24 @@ function updateFilterBar() {
   const tags = document.getElementById('filter-tags');
   const count = document.getElementById('filter-count');
   const activeFilters = Object.keys(filters);
+  const globalSearch = (document.getElementById('global-search')?.value || '').trim();
 
-  if (activeFilters.length === 0) {
+  if (activeFilters.length === 0 && !globalSearch) {
     bar.classList.add('hidden');
     return;
   }
 
   bar.classList.remove('hidden');
   tags.innerHTML = '';
+
+  // Show global search as a tag
+  if (globalSearch) {
+    const tag = document.createElement('span');
+    tag.className = 'filter-tag';
+    tag.innerHTML = `Search: ${escHtml(globalSearch)} <button onclick="clearGlobalSearch()">&times;</button>`;
+    tags.appendChild(tag);
+  }
+
   for (const colIdx of activeFilters) {
     const col = columns[parseInt(colIdx)];
     const tag = document.createElement('span');
@@ -865,6 +875,11 @@ function updateFilterBar() {
 
 function removeFilter(colIdx) {
   delete filters[colIdx];
+  applyFilters();
+}
+
+function clearGlobalSearch() {
+  document.getElementById('global-search').value = '';
   applyFilters();
 }
 
