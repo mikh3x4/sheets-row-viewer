@@ -481,6 +481,8 @@ var filters = {};         // { colIndex: { type: 'checklist'|'search', values: S
 var writeQueue = [];
 var isWriting = false;
 var sheetTabName = null;  // resolved sheet tab name for writes
+var refreshTimer = null;  // debounce timer for lazy refresh
+var isRefreshing = false; // prevent overlapping refreshes
 
 // ============================================================
 // INIT
@@ -703,6 +705,70 @@ async function refreshData() {
   await loadSheetData();
 }
 
+// Debounced background refresh: waits 2s after last navigation, then silently re-fetches
+function scheduleRefresh() {
+  if (refreshTimer) clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(silentRefresh, 2000);
+}
+
+async function silentRefresh() {
+  if (isRefreshing || !accessToken || !spreadsheetId) return;
+  isRefreshing = true;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab');
+    let sheetName;
+
+    if (tabParam) {
+      sheetName = tabParam;
+    } else {
+      const metaRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties`,
+        { headers: { Authorization: 'Bearer ' + accessToken } }
+      );
+      if (!metaRes.ok) { isRefreshing = false; return; }
+      const meta = await metaRes.json();
+      sheetName = meta.sheets[0].properties.title;
+    }
+    sheetTabName = sheetName;
+
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent("'" + sheetName + "'")}?valueRenderOption=FORMATTED_VALUE`;
+    const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
+    if (!res.ok) { isRefreshing = false; return; }
+    const data = await res.json();
+    if (!data.values || data.values.length < 2) { isRefreshing = false; return; }
+
+    // Preserve the current applicant's identity (by row content) across refresh
+    const oldRowIdx = filteredIndices[currentIndex];
+    const oldFirstCell = oldRowIdx != null ? rows[oldRowIdx]?.[0] : null;
+
+    headers = data.values[0];
+    rows = data.values.slice(1);
+    const maxCols = headers.length;
+    rows = rows.map(r => { while (r.length < maxCols) r.push(''); return r; });
+
+    parseColumns();
+    applyFilters();
+
+    // Try to stay on the same applicant by matching first cell value
+    if (oldFirstCell != null) {
+      const newFiltered = filteredIndices.findIndex(i => rows[i]?.[0] === oldFirstCell);
+      if (newFiltered >= 0) currentIndex = newFiltered;
+    }
+    if (currentIndex >= filteredIndices.length) currentIndex = Math.max(0, filteredIndices.length - 1);
+
+    // Re-render, but skip fields the user is currently editing
+    const focused = document.activeElement;
+    const isEditing = focused && (focused.tagName === 'TEXTAREA') && focused.closest('#applicant-view');
+    if (!isEditing) {
+      renderApplicant();
+    }
+  } catch (e) {
+    console.error('Silent refresh failed:', e);
+  }
+  isRefreshing = false;
+}
+
 // ============================================================
 // COLUMN PARSING
 // ============================================================
@@ -908,6 +974,7 @@ function navigatePrev() {
   if (currentIndex > 0) {
     currentIndex--;
     renderApplicant();
+    scheduleRefresh();
   }
 }
 
@@ -915,6 +982,7 @@ function navigateNext() {
   if (currentIndex < filteredIndices.length - 1) {
     currentIndex++;
     renderApplicant();
+    scheduleRefresh();
   }
 }
 
@@ -923,6 +991,7 @@ function handleJump() {
   if (isNaN(val) || val < 1 || val > filteredIndices.length) return;
   currentIndex = val - 1;
   renderApplicant();
+  scheduleRefresh();
 }
 
 // ============================================================
