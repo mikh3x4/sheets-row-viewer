@@ -879,14 +879,13 @@ function applyFilters() {
       const val = (rows[i][parseInt(colIdx)] || '').toString();
       if (filter.type === 'checklist') {
         const hasEmpty = filter.values.has('__empty__');
+        const hasNotEmpty = filter.values.has('__not_empty__');
         const matchesValue = filter.values.has(val);
         const matchesEmpty = hasEmpty && val === '';
-        if (!matchesValue && !matchesEmpty) { pass = false; break; }
+        const matchesNotEmpty = hasNotEmpty && val !== '';
+        if (!matchesValue && !matchesEmpty && !matchesNotEmpty) { pass = false; break; }
       } else if (filter.type === 'search') {
         if (filter.value && !val.toLowerCase().includes(filter.value.toLowerCase())) { pass = false; break; }
-      } else if (filter.type === 'empty_status') {
-        if (filter.value === 'empty' && val !== '') { pass = false; break; }
-        if (filter.value === 'not_empty' && val === '') { pass = false; break; }
       }
     }
 
@@ -939,13 +938,13 @@ function updateFilterBar() {
     if (filter.type === 'search') {
       detail = `: "${filter.value}"`;
     } else if (filter.type === 'checklist') {
-      const vals = [...filter.values].filter(v => v !== '__empty__');
+      const vals = [...filter.values].filter(v => v !== '__empty__' && v !== '__not_empty__');
       const hasEmpty = filter.values.has('__empty__');
+      const hasNotEmpty = filter.values.has('__not_empty__');
       const parts = vals.map(v => v.length > 20 ? v.slice(0, 20) + '...' : v);
+      if (hasNotEmpty) parts.push('(not empty)');
       if (hasEmpty) parts.push('(empty)');
       detail = parts.length <= 3 ? ': ' + parts.join(', ') : ': ' + parts.slice(0, 2).join(', ') + ` +${parts.length - 2} more`;
-    } else if (filter.type === 'empty_status') {
-      detail = filter.value === 'empty' ? ': empty' : ': not empty';
     }
     const tag = document.createElement('span');
     tag.className = 'filter-tag';
@@ -1001,45 +1000,31 @@ function openFilterPopover(colIdx, buttonEl) {
   </div>`;
 
   const nonEmptyCount = rows.length - emptyCount;
-  const isEmptyFilter = existingFilter?.type === 'empty_status';
-  const emptyStatusVal = isEmptyFilter ? existingFilter.value : 'all';
+  const selectedValues = existingFilter?.type === 'checklist' ? new Set(existingFilter.values) : null;
 
   html += `<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px;">`;
-  html += `<label><input type="radio" name="empty-filter" value="all" ${emptyStatusVal === 'all' ? 'checked' : ''}> All <span style="color:#999">(${rows.length})</span></label>`;
-  html += `<label><input type="radio" name="empty-filter" value="not_empty" ${emptyStatusVal === 'not_empty' ? 'checked' : ''}> Not empty <span style="color:#999">(${nonEmptyCount})</span></label>`;
-  html += `<label><input type="radio" name="empty-filter" value="empty" ${emptyStatusVal === 'empty' ? 'checked' : ''}> Empty <span style="color:#999">(${emptyCount})</span></label>`;
-  html += `<div class="filter-actions">
-    <button class="apply" onclick="applyEmptyFilter(${colIdx})">Apply</button>
-  </div></div>`;
 
   if (distinctValues.length <= 20) {
-    const selectedValues = existingFilter?.type === 'checklist' ? new Set(existingFilter.values) : null;
-    html += `<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px;">`;
+    // Individual value checkboxes
     html += `<label><input type="checkbox" data-val="__empty__" ${selectedValues ? (selectedValues.has('__empty__') ? 'checked' : '') : 'checked'}> (empty) <span style="color:#999">(${emptyCount})</span></label>`;
     for (const v of distinctValues) {
       const checked = selectedValues ? (selectedValues.has(v) ? 'checked' : '') : 'checked';
       html += `<label><input type="checkbox" data-val="${escAttr(v)}" ${checked}> ${escHtml(v.length > 50 ? v.slice(0, 50) + '...' : v)} <span style="color:#999">(${valueCounts[v]})</span></label>`;
     }
-    html += `<div class="filter-actions">
-      <button onclick="filterSelectAll(${colIdx}, this)">All</button>
-      <button onclick="filterSelectNone(${colIdx}, this)">None</button>
-      <button class="apply" onclick="applyChecklistFilter(${colIdx})">Apply checklist</button>
-    </div></div>`;
+  } else {
+    // Collapsed: just empty / not empty
+    html += `<label><input type="checkbox" data-val="__empty__" ${selectedValues ? (selectedValues.has('__empty__') ? 'checked' : '') : 'checked'}> (empty) <span style="color:#999">(${emptyCount})</span></label>`;
+    html += `<label><input type="checkbox" data-val="__not_empty__" ${selectedValues ? (selectedValues.has('__not_empty__') ? 'checked' : '') : 'checked'}> (not empty) <span style="color:#999">(${nonEmptyCount})</span></label>`;
   }
+
+  html += `<div class="filter-actions">
+    <button onclick="filterSelectAll(${colIdx}, this)">All</button>
+    <button onclick="filterSelectNone(${colIdx}, this)">None</button>
+    <button class="apply" onclick="applyChecklistFilter(${colIdx})">Apply</button>
+  </div></div>`;
   pop.innerHTML = html;
 }
 
-function applyEmptyFilter(colIdx) {
-  const pop = document.getElementById('filter-popover');
-  const selected = pop.querySelector('input[name="empty-filter"]:checked')?.value;
-  if (!selected || selected === 'all') {
-    delete filters[colIdx];
-  } else {
-    filters[colIdx] = { type: 'empty_status', value: selected };
-  }
-  pop.classList.add('hidden');
-  applyFilters();
-}
 
 function filterSelectAll(colIdx, btn) {
   const pop = document.getElementById('filter-popover');
