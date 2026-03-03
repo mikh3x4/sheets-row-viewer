@@ -242,7 +242,7 @@
     border: none;
     cursor: pointer;
     color: var(--text-muted);
-    padding: 2px 4px;
+    padding: 4px 6px;
     border-radius: 4px;
     transition: all 0.15s;
     margin-left: 4px;
@@ -250,6 +250,7 @@
     display: inline-flex;
     align-items: center;
   }
+  .filter-icon svg { pointer-events: none; }
   .filter-icon:hover { color: var(--primary); background: #eef2ff; }
   .filter-icon.active { color: var(--primary); background: #eef2ff; }
 
@@ -536,7 +537,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // Close filter popover on outside click
   document.addEventListener('click', (e) => {
     const pop = document.getElementById('filter-popover');
-    if (!pop.classList.contains('hidden') && !pop.contains(e.target) && !e.target.classList.contains('filter-icon')) {
+    if (!pop.classList.contains('hidden') && !pop.contains(e.target) && !e.target.closest('.filter-icon')) {
       pop.classList.add('hidden');
     }
   });
