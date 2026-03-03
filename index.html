@@ -521,7 +521,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   if (sheetParam) {
     spreadsheetId = sheetParam;
-    showScreen('auth');
+    showScreen('loading'); // Show loading while attempting silent auth
     loadGsiScript();
   } else {
     showScreen('setup');
@@ -584,7 +584,15 @@ function initTokenClient() {
     client_id: CLIENT_ID,
     scope: SCOPES,
     callback: handleTokenResponse,
+    error_callback: (err) => {
+      // Silent auth failed — show sign-in button
+      console.log('Silent auth failed, showing sign-in screen', err);
+      showScreen('auth');
+    },
   });
+
+  // Attempt silent token request (no popup if user already granted consent)
+  tokenClient.requestAccessToken({ prompt: '' });
 }
 
 function handleSignIn() {
@@ -592,7 +600,8 @@ function handleSignIn() {
     alert('Google auth not ready yet. Please wait a moment and try again.');
     return;
   }
-  tokenClient.requestAccessToken();
+  // Explicit sign-in — allow consent prompt
+  tokenClient.requestAccessToken({ prompt: 'consent' });
 }
 
 async function handleTokenResponse(resp) {
