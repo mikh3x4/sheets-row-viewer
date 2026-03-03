@@ -924,9 +924,20 @@ function updateFilterBar() {
 
   for (const colIdx of activeFilters) {
     const col = columns[parseInt(colIdx)];
+    const filter = filters[colIdx];
+    let detail = '';
+    if (filter.type === 'search') {
+      detail = `: "${filter.value}"`;
+    } else if (filter.type === 'checklist') {
+      const vals = [...filter.values].filter(v => v !== '__empty__');
+      const hasEmpty = filter.values.has('__empty__');
+      const parts = vals.map(v => v.length > 20 ? v.slice(0, 20) + '...' : v);
+      if (hasEmpty) parts.push('(empty)');
+      detail = parts.length <= 3 ? ': ' + parts.join(', ') : ': ' + parts.slice(0, 2).join(', ') + ` +${parts.length - 2} more`;
+    }
     const tag = document.createElement('span');
     tag.className = 'filter-tag';
-    tag.innerHTML = `${escHtml(col.name)} <button onclick="removeFilter(${colIdx})">&times;</button>`;
+    tag.innerHTML = `${escHtml(col.name)}${escHtml(detail)} <button onclick="removeFilter(${colIdx})">&times;</button>`;
     tags.appendChild(tag);
   }
   count.textContent = `Showing ${filteredIndices.length} of ${rows.length} applicants`;
