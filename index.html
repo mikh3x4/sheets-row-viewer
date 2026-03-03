@@ -86,6 +86,14 @@
     width: 200px;
   }
 
+  .jump-id-input {
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 14px;
+    width: 120px;
+  }
+
   .icon-btn {
     background: none;
     border: 1px solid var(--border);
@@ -449,6 +457,7 @@
     </div>
     <div class="topbar-center">
       <input class="search-input" id="global-search" type="text" placeholder="Search applicants..." oninput="handleGlobalSearch()">
+      <input class="jump-id-input" id="jump-id-input" type="text" placeholder="Go to ID..." title="Jump to application by ID (Enter to go)" onkeydown="if(event.key==='Enter')handleJumpToId()">
     </div>
     <div class="topbar-right">
       <button class="icon-btn" onclick="refreshData()" title="Refresh data from sheet">&#x21bb; Refresh</button>
@@ -1021,6 +1030,55 @@ function handleJump() {
   currentIndex = val - 1;
   renderApplicant();
   scheduleRefresh();
+}
+
+function handleJumpToId() {
+  const input = document.getElementById('jump-id-input');
+  const target = input.value.trim();
+  if (!target) return;
+
+  // Find the "id" column (case-insensitive)
+  const idColIdx = headers.findIndex(h => h.toLowerCase().replace(/\s+/g, '') === 'id');
+  if (idColIdx < 0) {
+    // No "id" column — fall back to searching first column
+    const match = filteredIndices.findIndex(i => (rows[i][0] || '').toString().toLowerCase() === target.toLowerCase());
+    if (match >= 0) {
+      currentIndex = match;
+      renderApplicant();
+      scheduleRefresh();
+      input.value = '';
+    } else {
+      input.style.outline = '2px solid var(--red)';
+      setTimeout(() => input.style.outline = '', 1000);
+    }
+    return;
+  }
+
+  // Search in filtered results first, then all rows
+  let match = filteredIndices.findIndex(i => (rows[i][idColIdx] || '').toString().toLowerCase() === target.toLowerCase());
+  if (match >= 0) {
+    currentIndex = match;
+    renderApplicant();
+    scheduleRefresh();
+    input.value = '';
+    return;
+  }
+
+  // Not in filtered set — search all rows and clear filters to show it
+  const allMatch = rows.findIndex(r => (r[idColIdx] || '').toString().toLowerCase() === target.toLowerCase());
+  if (allMatch >= 0) {
+    filters = {};
+    document.getElementById('global-search').value = '';
+    applyFilters();
+    const newFilteredIdx = filteredIndices.indexOf(allMatch);
+    if (newFilteredIdx >= 0) currentIndex = newFilteredIdx;
+    renderApplicant();
+    scheduleRefresh();
+    input.value = '';
+  } else {
+    input.style.outline = '2px solid var(--red)';
+    setTimeout(() => input.style.outline = '', 1000);
+  }
 }
 
 // ============================================================
