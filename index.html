@@ -584,15 +584,34 @@ function initTokenClient() {
     client_id: CLIENT_ID,
     scope: SCOPES,
     callback: handleTokenResponse,
-    error_callback: (err) => {
-      // Silent auth failed — show sign-in button
-      console.log('Silent auth failed, showing sign-in screen', err);
-      showScreen('auth');
-    },
   });
 
-  // Attempt silent token request (no popup if user already granted consent)
-  tokenClient.requestAccessToken({ prompt: '' });
+  // Try to restore session from sessionStorage
+  tryRestoreSession();
+}
+
+async function tryRestoreSession() {
+  const saved = sessionStorage.getItem('reviewer_auth');
+  if (!saved) { showScreen('auth'); return; }
+
+  try {
+    const { token, email } = JSON.parse(saved);
+    // Validate the token is still alive
+    const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!res.ok) { sessionStorage.removeItem('reviewer_auth'); showScreen('auth'); return; }
+
+    const info = await res.json();
+    accessToken = token;
+    userEmail = info.email.toLowerCase();
+    document.getElementById('user-info').textContent = userEmail;
+    showScreen('loading');
+    await loadSheetData();
+  } catch (e) {
+    sessionStorage.removeItem('reviewer_auth');
+    showScreen('auth');
+  }
 }
 
 function handleSignIn() {
@@ -600,8 +619,7 @@ function handleSignIn() {
     alert('Google auth not ready yet. Please wait a moment and try again.');
     return;
   }
-  // Explicit sign-in — allow consent prompt
-  tokenClient.requestAccessToken({ prompt: 'consent' });
+  tokenClient.requestAccessToken();
 }
 
 async function handleTokenResponse(resp) {
@@ -627,6 +645,9 @@ async function handleTokenResponse(resp) {
     return;
   }
 
+  // Save to sessionStorage for reload persistence
+  sessionStorage.setItem('reviewer_auth', JSON.stringify({ token: accessToken, email: userEmail }));
+
   showScreen('loading');
   await loadSheetData();
 }
@@ -635,6 +656,7 @@ function handleSignOut() {
   if (accessToken) {
     google.accounts.oauth2.revoke(accessToken);
   }
+  sessionStorage.removeItem('reviewer_auth');
   accessToken = null;
   userEmail = null;
   headers = [];
@@ -650,7 +672,7 @@ async function sheetsApiGet(range) {
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueRenderOption=FORMATTED_VALUE`;
   const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
   if (res.status === 401) {
-    // Token expired — re-auth
+    sessionStorage.removeItem('reviewer_auth');
     showScreen('auth');
     throw new Error('Token expired');
   }
@@ -672,6 +694,7 @@ async function sheetsApiUpdate(range, values) {
     body: JSON.stringify({ range, values }),
   });
   if (res.status === 401) {
+    sessionStorage.removeItem('reviewer_auth');
     showScreen('auth');
     throw new Error('Token expired');
   }
