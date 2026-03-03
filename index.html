@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Application Reviewer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f6fa;
+    --card-bg: #ffffff;
+    --border: #e0e3eb;
+    --text: #1a1a2e;
+    --text-muted: #6b7280;
+    --primary: #4f46e5;
+    --primary-hover: #4338ca;
+    --green: #16a34a;
+    --orange: #ea580c;
+    --red: #dc2626;
+    --editable-bg: #f0f4ff;
+    --shared-bg: #fef9ee;
+    --readonly-bg: #f9fafb;
+    --radius: 8px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  /* Top bar */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 8px; }
+  .topbar-center { display: flex; align-items: center; gap: 8px; flex: 1; justify-content: center; }
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+
+  .nav-btn {
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    padding: 6px 14px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background 0.15s;
+  }
+  .nav-btn:hover { background: var(--primary-hover); }
+  .nav-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .nav-info {
+    font-size: 14px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .jump-input {
+    width: 70px;
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 14px;
+    text-align: center;
+  }
+
+  .search-input {
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 14px;
+    width: 200px;
+  }
+
+  .icon-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 5px 10px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-muted);
+    transition: all 0.15s;
+  }
+  .icon-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+  .user-info {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  /* Filter bar */
+  .filter-bar {
+    background: #eef2ff;
+    padding: 6px 16px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .filter-bar.hidden { display: none; }
+  .filter-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--primary);
+    color: #fff;
+    border-radius: 12px;
+    padding: 2px 10px;
+    font-size: 12px;
+  }
+  .filter-tag button {
+    background: none;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0 2px;
+  }
+
+  /* Auth / Setup screens */
+  .screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 20px;
+    text-align: center;
+  }
+  .screen h1 { font-size: 28px; margin-bottom: 12px; }
+  .screen p { color: var(--text-muted); margin-bottom: 20px; max-width: 500px; }
+  .screen input[type="text"] {
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 15px;
+    width: 100%;
+    max-width: 500px;
+    margin-bottom: 12px;
+  }
+  .screen .btn-primary {
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    padding: 10px 24px;
+    font-size: 15px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.15s;
+  }
+  .screen .btn-primary:hover { background: var(--primary-hover); }
+
+  /* Main content */
+  .main-content {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px 16px 80px;
+  }
+
+  /* Field cards */
+  .field-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin-bottom: 12px;
+  }
+  .field-card.editable-mine {
+    background: var(--editable-bg);
+    border-color: #a5b4fc;
+  }
+  .field-card.editable-shared {
+    background: var(--shared-bg);
+    border-color: #fbbf24;
+  }
+  .field-card.readonly-reviewer {
+    background: var(--readonly-bg);
+    opacity: 0.75;
+  }
+
+  .field-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .field-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .field-owner {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+  .filter-icon {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--text-muted);
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: all 0.15s;
+    margin-left: 6px;
+  }
+  .filter-icon:hover { color: var(--primary); background: #eef2ff; }
+  .filter-icon.active { color: var(--primary); background: #eef2ff; }
+
+  .field-value {
+    font-size: 15px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .field-value a {
+    color: var(--primary);
+    text-decoration: underline;
+  }
+  .field-value.empty {
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .field-textarea {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 15px;
+    font-family: inherit;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 40px;
+    transition: border-color 0.15s;
+  }
+  .field-textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(79,70,229,0.15);
+  }
+
+  /* Save indicator */
+  .save-indicator {
+    font-size: 12px;
+    margin-top: 4px;
+    height: 18px;
+  }
+  .save-indicator.saving { color: var(--orange); }
+  .save-indicator.saved { color: var(--green); }
+  .save-indicator.error { color: var(--red); }
+
+  /* Section divider */
+  .section-divider {
+    text-align: center;
+    margin: 24px 0 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    position: relative;
+  }
+  .section-divider::before, .section-divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 30%;
+    height: 1px;
+    background: var(--border);
+  }
+  .section-divider::before { left: 0; }
+  .section-divider::after { right: 0; }
+
+  /* Embedded content */
+  .embed-container {
+    margin-top: 8px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .embed-container iframe {
+    width: 100%;
+    height: 600px;
+    border: none;
+  }
+
+  /* Filter popover */
+  .filter-popover {
+    position: fixed;
+    z-index: 200;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+    padding: 12px;
+    min-width: 240px;
+    max-width: 320px;
+    max-height: 350px;
+    overflow-y: auto;
+  }
+  .filter-popover.hidden { display: none; }
+  .filter-popover h4 {
+    font-size: 13px;
+    margin-bottom: 8px;
+    color: var(--text-muted);
+  }
+  .filter-popover label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .filter-popover input[type="text"] {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 14px;
+  }
+  .filter-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .filter-actions button {
+    flex: 1;
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .filter-actions button.apply {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+
+  /* Loading spinner */
+  .spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 80vh;
+    gap: 12px;
+    color: var(--text-muted);
+  }
+
+  /* Keyboard shortcuts hint */
+  .kbd-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  kbd {
+    background: #e5e7eb;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: inherit;
+    font-size: 11px;
+  }
+</style>
+</head>
+<body>
+
+<!-- Screen: No sheet ID provided -->
+<div id="screen-setup" class="screen" style="display:none;">
+  <h1>Application Reviewer</h1>
+  <p>Paste a Google Sheets URL or Sheet ID below to get started.</p>
+  <input type="text" id="sheet-url-input" placeholder="https://docs.google.com/spreadsheets/d/abc123.../edit">
+  <br>
+  <button class="btn-primary" onclick="handleSheetSubmit()">Open Sheet</button>
+</div>
+
+<!-- Screen: Auth -->
+<div id="screen-auth" class="screen" style="display:none;">
+  <h1>Application Reviewer</h1>
+  <p>Sign in with your Google account to access the sheet.</p>
+  <button class="btn-primary" id="btn-signin" onclick="handleSignIn()">Sign in with Google</button>
+</div>
+
+<!-- Screen: Loading -->
+<div id="screen-loading" class="loading-screen" style="display:none;">
+  <div class="spinner"></div>
+  <div>Loading sheet data...</div>
+</div>
+
+<!-- Screen: Main app -->
+<div id="screen-app" style="display:none;">
+  <div class="topbar">
+    <div class="topbar-left">
+      <button class="nav-btn" id="btn-prev" onclick="navigatePrev()" title="Previous (Left Arrow)">&#8592; Prev</button>
+      <button class="nav-btn" id="btn-next" onclick="navigateNext()" title="Next (Right Arrow)">Next &#8594;</button>
+      <input class="jump-input" id="jump-input" type="number" min="1" title="Jump to applicant #" onchange="handleJump()">
+      <span class="nav-info" id="nav-info"></span>
+    </div>
+    <div class="topbar-center">
+      <input class="search-input" id="global-search" type="text" placeholder="Search applicants..." oninput="handleGlobalSearch()">
+    </div>
+    <div class="topbar-right">
+      <button class="icon-btn" onclick="refreshData()" title="Refresh data from sheet">&#x21bb; Refresh</button>
+      <span class="user-info" id="user-info"></span>
+      <button class="icon-btn" onclick="handleSignOut()">Sign out</button>
+    </div>
+  </div>
+  <div id="filter-bar" class="filter-bar hidden">
+    <span>Filters:</span>
+    <span id="filter-tags"></span>
+    <span id="filter-count" class="nav-info"></span>
+    <button class="icon-btn" onclick="clearAllFilters()">Clear all</button>
+  </div>
+  <div class="main-content" id="applicant-view"></div>
+</div>
+
+<!-- Filter popover (reused) -->
+<div id="filter-popover" class="filter-popover hidden"></div>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+// IMPORTANT: Replace this with your own OAuth Client ID from Google Cloud Console
+const CLIENT_ID = 'YOUR_CLIENT_ID.apps.googleusercontent.com';
+const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email';
+const DISCOVERY_DOC = 'https://sheets.googleapis.com/$discovery/rest?version=v4';
+
+// ============================================================
+// STATE
+// ============================================================
+var spreadsheetId = null;
+var accessToken = null;
+var userEmail = null;
+var tokenClient = null;
+
+var headers = [];        // array of header strings
+var rows = [];           // array of arrays (each row's cell values)
+var columns = [];        // parsed column metadata: { index, name, rawHeader, type, ownerEmail }
+                         // type: 'readonly' | 'editable-mine' | 'editable-shared' | 'editable-other'
+
+var currentIndex = 0;    // index into filteredIndices
+var filteredIndices = []; // indices into rows[] that pass all filters
+
+var filters = {};         // { colIndex: { type: 'checklist'|'search', values: Set|string } }
+
+var writeQueue = [];
+var isWriting = false;
+var sheetTabName = null;  // resolved sheet tab name for writes
+
+// ============================================================
+// INIT
+// ============================================================
+window.addEventListener('DOMContentLoaded', () => {
+  // Parse sheet ID from URL
+  const params = new URLSearchParams(window.location.search);
+  const sheetParam = params.get('sheet');
+
+  if (sheetParam) {
+    spreadsheetId = sheetParam;
+    showScreen('auth');
+    loadGsiScript();
+  } else {
+    showScreen('setup');
+  }
+
+  // Keyboard navigation
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); navigatePrev(); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); navigateNext(); }
+  });
+
+  // Close filter popover on outside click
+  document.addEventListener('click', (e) => {
+    const pop = document.getElementById('filter-popover');
+    if (!pop.classList.contains('hidden') && !pop.contains(e.target) && !e.target.classList.contains('filter-icon')) {
+      pop.classList.add('hidden');
+    }
+  });
+});
+
+function showScreen(name) {
+  ['screen-setup', 'screen-auth', 'screen-loading', 'screen-app'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+  const el = document.getElementById('screen-' + name);
+  if (el) el.style.display = '';
+}
+
+// ============================================================
+// SHEET SETUP
+// ============================================================
+function handleSheetSubmit() {
+  const input = document.getElementById('sheet-url-input').value.trim();
+  if (!input) return;
+
+  // Try to extract sheet ID from a Google Sheets URL
+  const match = input.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  const id = match ? match[1] : input;
+
+  // Redirect to parameterized URL
+  const url = new URL(window.location.href);
+  url.searchParams.set('sheet', id);
+  window.location.href = url.toString();
+}
+
+// ============================================================
+// GOOGLE IDENTITY SERVICES (OAuth)
+// ============================================================
+function loadGsiScript() {
+  const script = document.createElement('script');
+  script.src = 'https://accounts.google.com/gsi/client';
+  script.onload = initTokenClient;
+  script.onerror = () => alert('Failed to load Google Identity Services. Check your internet connection.');
+  document.head.appendChild(script);
+}
+
+function initTokenClient() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    callback: handleTokenResponse,
+  });
+}
+
+function handleSignIn() {
+  if (!tokenClient) {
+    alert('Google auth not ready yet. Please wait a moment and try again.');
+    return;
+  }
+  tokenClient.requestAccessToken();
+}
+
+async function handleTokenResponse(resp) {
+  if (resp.error) {
+    console.error('OAuth error:', resp);
+    alert('Authentication failed: ' + (resp.error_description || resp.error));
+    return;
+  }
+
+  accessToken = resp.access_token;
+
+  // Fetch user email
+  try {
+    const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: 'Bearer ' + accessToken }
+    });
+    const info = await res.json();
+    userEmail = info.email.toLowerCase();
+    document.getElementById('user-info').textContent = userEmail;
+  } catch (e) {
+    console.error('Failed to get user info:', e);
+    alert('Failed to get user info. Try again.');
+    return;
+  }
+
+  showScreen('loading');
+  await loadSheetData();
+}
+
+function handleSignOut() {
+  if (accessToken) {
+    google.accounts.oauth2.revoke(accessToken);
+  }
+  accessToken = null;
+  userEmail = null;
+  headers = [];
+  rows = [];
+  columns = [];
+  showScreen('auth');
+}
+
+// ============================================================
+// SHEETS API
+// ============================================================
+async function sheetsApiGet(range) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueRenderOption=FORMATTED_VALUE`;
+  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
+  if (res.status === 401) {
+    // Token expired — re-auth
+    showScreen('auth');
+    throw new Error('Token expired');
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Sheets API error ${res.status}: ${text}`);
+  }
+  return res.json();
+}
+
+async function sheetsApiUpdate(range, values) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`;
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      Authorization: 'Bearer ' + accessToken,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ range, values }),
+  });
+  if (res.status === 401) {
+    showScreen('auth');
+    throw new Error('Token expired');
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Sheets API write error ${res.status}: ${text}`);
+  }
+  return res.json();
+}
+
+// ============================================================
+// DATA LOADING
+// ============================================================
+async function loadSheetData() {
+  showScreen('loading');
+  try {
+    // Check for tab name in URL params
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab');
+    let sheetName;
+
+    if (tabParam) {
+      sheetName = tabParam;
+    } else {
+      // Get spreadsheet metadata to find the first sheet name
+      const metaRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties`,
+        { headers: { Authorization: 'Bearer ' + accessToken } }
+      );
+      if (!metaRes.ok) throw new Error('Failed to fetch spreadsheet metadata');
+      const meta = await metaRes.json();
+      sheetName = meta.sheets[0].properties.title;
+    }
+
+    sheetTabName = sheetName;
+
+    // Read all data
+    const data = await sheetsApiGet(`'${sheetName}'`);
+    if (!data.values || data.values.length < 2) {
+      alert('Sheet appears to be empty or has only headers.');
+      return;
+    }
+
+    headers = data.values[0];
+    rows = data.values.slice(1);
+
+    // Normalize row lengths
+    const maxCols = headers.length;
+    rows = rows.map(r => {
+      while (r.length < maxCols) r.push('');
+      return r;
+    });
+
+    parseColumns();
+    resetFilters();
+    currentIndex = 0;
+    showScreen('app');
+    renderApplicant();
+  } catch (e) {
+    console.error('Load error:', e);
+    alert('Failed to load sheet: ' + e.message);
+    showScreen('auth');
+  }
+}
+
+async function refreshData() {
+  await loadSheetData();
+}
+
+// ============================================================
+// COLUMN PARSING
+// ============================================================
+const EDITABLE_RE = /^(.+?)\s*\[([^\]]+)\]\s*$/;
+
+function parseColumns() {
+  columns = headers.map((h, i) => {
+    const m = h.match(EDITABLE_RE);
+    if (m) {
+      const name = m[1].trim();
+      const bracket = m[2].trim();
+      if (bracket === '*') {
+        return { index: i, name, rawHeader: h, type: 'editable-shared', ownerEmail: null };
+      }
+      const email = bracket.toLowerCase();
+      if (email === userEmail) {
+        return { index: i, name, rawHeader: h, type: 'editable-mine', ownerEmail: email };
+      }
+      return { index: i, name, rawHeader: h, type: 'editable-other', ownerEmail: email };
+    }
+    return { index: i, name: h, rawHeader: h, type: 'readonly', ownerEmail: null };
+  });
+}
+
+// ============================================================
+// FILTERING
+// ============================================================
+function resetFilters() {
+  filteredIndices = rows.map((_, i) => i);
+  applyFilters();
+}
+
+function applyFilters() {
+  const globalSearch = (document.getElementById('global-search')?.value || '').toLowerCase().trim();
+
+  filteredIndices = [];
+  for (let i = 0; i < rows.length; i++) {
+    let pass = true;
+
+    // Column filters
+    for (const [colIdx, filter] of Object.entries(filters)) {
+      const val = (rows[i][parseInt(colIdx)] || '').toString();
+      if (filter.type === 'checklist') {
+        const hasEmpty = filter.values.has('__empty__');
+        const matchesValue = filter.values.has(val);
+        const matchesEmpty = hasEmpty && val === '';
+        if (!matchesValue && !matchesEmpty) { pass = false; break; }
+      } else if (filter.type === 'search') {
+        if (filter.value && !val.toLowerCase().includes(filter.value.toLowerCase())) { pass = false; break; }
+      }
+    }
+
+    // Global search
+    if (pass && globalSearch) {
+      const rowText = rows[i].join(' ').toLowerCase();
+      if (!rowText.includes(globalSearch)) pass = false;
+    }
+
+    if (pass) filteredIndices.push(i);
+  }
+
+  updateFilterBar();
+  // Ensure currentIndex is valid
+  if (currentIndex >= filteredIndices.length) currentIndex = Math.max(0, filteredIndices.length - 1);
+  renderApplicant();
+}
+
+function handleGlobalSearch() {
+  applyFilters();
+}
+
+function updateFilterBar() {
+  const bar = document.getElementById('filter-bar');
+  const tags = document.getElementById('filter-tags');
+  const count = document.getElementById('filter-count');
+  const activeFilters = Object.keys(filters);
+
+  if (activeFilters.length === 0) {
+    bar.classList.add('hidden');
+    return;
+  }
+
+  bar.classList.remove('hidden');
+  tags.innerHTML = '';
+  for (const colIdx of activeFilters) {
+    const col = columns[parseInt(colIdx)];
+    const tag = document.createElement('span');
+    tag.className = 'filter-tag';
+    tag.innerHTML = `${escHtml(col.name)} <button onclick="removeFilter(${colIdx})">&times;</button>`;
+    tags.appendChild(tag);
+  }
+  count.textContent = `Showing ${filteredIndices.length} of ${rows.length} applicants`;
+}
+
+function removeFilter(colIdx) {
+  delete filters[colIdx];
+  applyFilters();
+}
+
+function clearAllFilters() {
+  filters = {};
+  document.getElementById('global-search').value = '';
+  applyFilters();
+}
+
+function openFilterPopover(colIdx, buttonEl) {
+  const pop = document.getElementById('filter-popover');
+  const col = columns[colIdx];
+
+  // Position near button
+  const rect = buttonEl.getBoundingClientRect();
+  pop.style.top = (rect.bottom + 4) + 'px';
+  pop.style.left = Math.min(rect.left, window.innerWidth - 330) + 'px';
+  pop.classList.remove('hidden');
+
+  // Count distinct values
+  const valueCounts = {};
+  let emptyCount = 0;
+  for (const row of rows) {
+    const v = (row[colIdx] || '').toString();
+    if (v === '') { emptyCount++; continue; }
+    valueCounts[v] = (valueCounts[v] || 0) + 1;
+  }
+  const distinctValues = Object.keys(valueCounts).sort();
+  const existingFilter = filters[colIdx];
+
+  if (distinctValues.length <= 20) {
+    // Checklist mode
+    const selectedValues = existingFilter?.type === 'checklist' ? new Set(existingFilter.values) : null;
+    let html = `<h4>Filter: ${escHtml(col.name)}</h4>`;
+    html += `<label><input type="checkbox" data-val="__empty__" ${selectedValues ? (selectedValues.has('__empty__') ? 'checked' : '') : 'checked'}> (empty) <span style="color:#999">(${emptyCount})</span></label>`;
+    for (const v of distinctValues) {
+      const checked = selectedValues ? (selectedValues.has(v) ? 'checked' : '') : 'checked';
+      html += `<label><input type="checkbox" data-val="${escAttr(v)}" ${checked}> ${escHtml(v.length > 50 ? v.slice(0, 50) + '...' : v)} <span style="color:#999">(${valueCounts[v]})</span></label>`;
+    }
+    html += `<div class="filter-actions">
+      <button onclick="filterSelectAll(${colIdx}, this)">All</button>
+      <button onclick="filterSelectNone(${colIdx}, this)">None</button>
+      <button class="apply" onclick="applyChecklistFilter(${colIdx})">Apply</button>
+    </div>`;
+    pop.innerHTML = html;
+  } else {
+    // Search mode
+    const current = existingFilter?.type === 'search' ? existingFilter.value : '';
+    pop.innerHTML = `<h4>Filter: ${escHtml(col.name)}</h4>
+      <p style="font-size:12px;color:#999;margin-bottom:8px">${distinctValues.length} distinct values — use text search</p>
+      <input type="text" id="filter-search-input" value="${escAttr(current)}" placeholder="Type to filter...">
+      <div class="filter-actions">
+        <button onclick="clearSearchFilter(${colIdx})">Clear</button>
+        <button class="apply" onclick="applySearchFilter(${colIdx})">Apply</button>
+      </div>`;
+  }
+}
+
+function filterSelectAll(colIdx, btn) {
+  const pop = document.getElementById('filter-popover');
+  pop.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+}
+
+function filterSelectNone(colIdx, btn) {
+  const pop = document.getElementById('filter-popover');
+  pop.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+}
+
+function applyChecklistFilter(colIdx) {
+  const pop = document.getElementById('filter-popover');
+  const checked = new Set();
+  pop.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+    checked.add(cb.dataset.val);
+  });
+  const allCheckboxes = pop.querySelectorAll('input[type="checkbox"]');
+  if (checked.size === allCheckboxes.length) {
+    // All selected = no filter
+    delete filters[colIdx];
+  } else {
+    filters[colIdx] = { type: 'checklist', values: checked };
+  }
+  pop.classList.add('hidden');
+  applyFilters();
+}
+
+function applySearchFilter(colIdx) {
+  const val = document.getElementById('filter-search-input').value.trim();
+  if (!val) {
+    delete filters[colIdx];
+  } else {
+    filters[colIdx] = { type: 'search', value: val };
+  }
+  document.getElementById('filter-popover').classList.add('hidden');
+  applyFilters();
+}
+
+function clearSearchFilter(colIdx) {
+  delete filters[colIdx];
+  document.getElementById('filter-popover').classList.add('hidden');
+  applyFilters();
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function navigatePrev() {
+  if (currentIndex > 0) {
+    currentIndex--;
+    renderApplicant();
+  }
+}
+
+function navigateNext() {
+  if (currentIndex < filteredIndices.length - 1) {
+    currentIndex++;
+    renderApplicant();
+  }
+}
+
+function handleJump() {
+  const val = parseInt(document.getElementById('jump-input').value);
+  if (isNaN(val) || val < 1 || val > filteredIndices.length) return;
+  currentIndex = val - 1;
+  renderApplicant();
+}
+
+// ============================================================
+// RENDERING
+// ============================================================
+function renderApplicant() {
+  const view = document.getElementById('applicant-view');
+  const info = document.getElementById('nav-info');
+  const jumpInput = document.getElementById('jump-input');
+  const prevBtn = document.getElementById('btn-prev');
+  const nextBtn = document.getElementById('btn-next');
+
+  if (filteredIndices.length === 0) {
+    view.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">No applicants match the current filters.</div>';
+    info.textContent = '0 of 0';
+    jumpInput.value = '';
+    prevBtn.disabled = true;
+    nextBtn.disabled = true;
+    return;
+  }
+
+  const rowIdx = filteredIndices[currentIndex];
+  const row = rows[rowIdx];
+
+  prevBtn.disabled = currentIndex <= 0;
+  nextBtn.disabled = currentIndex >= filteredIndices.length - 1;
+  info.textContent = `${currentIndex + 1} of ${filteredIndices.length}` + (filteredIndices.length < rows.length ? ` (${rows.length} total)` : '');
+  jumpInput.value = currentIndex + 1;
+  jumpInput.max = filteredIndices.length;
+
+  // Separate readonly and reviewer columns
+  const readonlyCols = columns.filter(c => c.type === 'readonly');
+  const reviewerCols = columns.filter(c => c.type !== 'readonly');
+
+  let html = '';
+
+  // Read-only application data
+  for (const col of readonlyCols) {
+    html += renderFieldCard(col, row[col.index], rowIdx);
+  }
+
+  // Reviewer section
+  if (reviewerCols.length > 0) {
+    html += '<div class="section-divider">Reviewer Fields</div>';
+    for (const col of reviewerCols) {
+      html += renderFieldCard(col, row[col.index], rowIdx);
+    }
+  }
+
+  view.innerHTML = html;
+  view.scrollTop = 0;
+  window.scrollTo(0, 0);
+
+  // Auto-size textareas
+  view.querySelectorAll('textarea.field-textarea').forEach(autoResize);
+}
+
+function renderFieldCard(col, value, rowIdx) {
+  const val = (value || '').toString();
+  const cssClass = col.type === 'readonly' ? '' :
+                   col.type === 'editable-mine' ? 'editable-mine' :
+                   col.type === 'editable-shared' ? 'editable-shared' :
+                   'readonly-reviewer';
+
+  const isEditable = col.type === 'editable-mine' || col.type === 'editable-shared';
+  const filterActive = filters[col.index] ? 'active' : '';
+
+  let ownerHtml = '';
+  if (col.type === 'editable-mine') ownerHtml = `<span class="field-owner">Your column</span>`;
+  else if (col.type === 'editable-shared') ownerHtml = `<span class="field-owner">Shared (anyone can edit)</span>`;
+  else if (col.type === 'editable-other') ownerHtml = `<span class="field-owner">${escHtml(col.ownerEmail)}</span>`;
+
+  let bodyHtml = '';
+  if (isEditable) {
+    bodyHtml = `<textarea class="field-textarea" data-col="${col.index}" data-row="${rowIdx}"
+      onblur="handleFieldSave(this)" oninput="autoResize(this)">${escHtml(val)}</textarea>
+      <div class="save-indicator" id="save-${col.index}-${rowIdx}"></div>`;
+  } else {
+    bodyHtml = renderCellValue(val);
+  }
+
+  return `<div class="field-card ${cssClass}">
+    <div class="field-header">
+      <span>
+        <span class="field-label">${escHtml(col.name)}</span>
+        <button class="filter-icon ${filterActive}" onclick="openFilterPopover(${col.index}, this)" title="Filter by this column">&#x25BC;</button>
+      </span>
+      ${ownerHtml}
+    </div>
+    ${bodyHtml}
+  </div>`;
+}
+
+function renderCellValue(val) {
+  if (!val) return '<div class="field-value empty">(empty)</div>';
+
+  // Check if URL
+  if (/^https?:\/\//i.test(val.trim())) {
+    const url = val.trim();
+    let html = `<div class="field-value"><a href="${escAttr(url)}" target="_blank" rel="noopener">${escHtml(url)}</a></div>`;
+
+    // Google Drive PDF
+    const driveMatch = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (driveMatch) {
+      const fileId = driveMatch[1];
+      html += `<div class="embed-container"><iframe src="https://drive.google.com/file/d/${fileId}/preview" allow="autoplay" loading="lazy"></iframe></div>`;
+      return html;
+    }
+
+    // Google Drive open link
+    const driveOpenMatch = url.match(/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/);
+    if (driveOpenMatch) {
+      const fileId = driveOpenMatch[1];
+      html += `<div class="embed-container"><iframe src="https://drive.google.com/file/d/${fileId}/preview" allow="autoplay" loading="lazy"></iframe></div>`;
+      return html;
+    }
+
+    // Direct PDF URL
+    if (url.match(/\.pdf(\?|$)/i)) {
+      html += `<div class="embed-container"><iframe src="${escAttr(url)}" loading="lazy"></iframe></div>`;
+      return html;
+    }
+
+    return html;
+  }
+
+  // Plain text — handle multi-line
+  return `<div class="field-value">${escHtml(val)}</div>`;
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.max(40, el.scrollHeight) + 'px';
+}
+
+// ============================================================
+// SAVING (Write Queue)
+// ============================================================
+function handleFieldSave(textarea) {
+  const colIdx = parseInt(textarea.dataset.col);
+  const rowIdx = parseInt(textarea.dataset.row);
+  const newValue = textarea.value;
+  const oldValue = rows[rowIdx][colIdx] || '';
+
+  if (newValue === oldValue) return;
+
+  // Update local data immediately
+  rows[rowIdx][colIdx] = newValue;
+
+  // Show saving indicator
+  const indicator = document.getElementById(`save-${colIdx}-${rowIdx}`);
+  if (indicator) {
+    indicator.textContent = 'Saving...';
+    indicator.className = 'save-indicator saving';
+  }
+
+  // Enqueue write
+  enqueueWrite(colIdx, rowIdx, newValue);
+}
+
+function enqueueWrite(colIdx, rowIdx, value) {
+  writeQueue.push({ colIdx, rowIdx, value });
+  processWriteQueue();
+}
+
+async function processWriteQueue() {
+  if (isWriting || writeQueue.length === 0) return;
+  isWriting = true;
+
+  const { colIdx, rowIdx, value } = writeQueue.shift();
+  const indicator = document.getElementById(`save-${colIdx}-${rowIdx}`);
+
+  try {
+    // Convert column index to A1 notation (include sheet name for multi-tab safety)
+    const colLetter = colToLetter(colIdx);
+    const sheetRow = rowIdx + 2; // +1 for header, +1 for 1-based
+    const range = sheetTabName ? `'${sheetTabName}'!${colLetter}${sheetRow}` : `${colLetter}${sheetRow}`;
+
+    await sheetsApiUpdate(range, [[value]]);
+
+    if (indicator) {
+      indicator.textContent = 'Saved \u2713';
+      indicator.className = 'save-indicator saved';
+      setTimeout(() => { indicator.textContent = ''; }, 2000);
+    }
+  } catch (e) {
+    console.error('Save failed:', e);
+    if (indicator) {
+      indicator.textContent = 'Save failed!';
+      indicator.className = 'save-indicator error';
+    }
+  }
+
+  isWriting = false;
+  processWriteQueue();
+}
+
+function colToLetter(col) {
+  let letter = '';
+  let c = col;
+  while (c >= 0) {
+    letter = String.fromCharCode((c % 26) + 65) + letter;
+    c = Math.floor(c / 26) - 1;
+  }
+  return letter;
+}
+
+// ============================================================
+// UTILITIES
+// ============================================================
+function escHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function escAttr(str) {
+  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+</script>
+</body>
+</html>
