@@ -2,6 +2,8 @@
 
 A single-file web app for reviewing applications stored in a Google Sheet. No backend — talks directly to the Sheets API via OAuth.
 
+![Screenshot](screenshot.png)
+
 ## Setup
 
 1. Create a GCP project, enable the Sheets API, and create an OAuth Client ID

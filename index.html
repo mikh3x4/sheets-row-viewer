@@ -1194,9 +1194,30 @@ function renderApplicant() {
     }
   }
 
+  // Find which field card is currently at the top of the viewport
+  const oldCards = view.querySelectorAll('.field-card, .section-divider');
+  let topCardIdx = 0;
+  let topCardOffset = 0;
+  for (let ci = 0; ci < oldCards.length; ci++) {
+    const rect = oldCards[ci].getBoundingClientRect();
+    if (rect.bottom > 80) { // 80 ≈ top bar height
+      topCardIdx = ci;
+      topCardOffset = rect.top;
+      break;
+    }
+  }
+
   view.innerHTML = html;
-  view.scrollTop = 0;
-  window.scrollTo(0, 0);
+
+  // Restore scroll position to same field card index
+  const newCards = view.querySelectorAll('.field-card, .section-divider');
+  if (topCardIdx > 0 && topCardIdx < newCards.length) {
+    const target = newCards[topCardIdx];
+    const targetRect = target.getBoundingClientRect();
+    window.scrollBy(0, targetRect.top - topCardOffset);
+  } else {
+    window.scrollTo(0, 0);
+  }
 
   // Auto-size textareas
   view.querySelectorAll('textarea.field-textarea').forEach(autoResize);
