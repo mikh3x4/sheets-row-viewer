@@ -586,12 +586,12 @@ function initTokenClient() {
     callback: handleTokenResponse,
   });
 
-  // Try to restore session from sessionStorage
+  // Try to restore session from localStorage
   tryRestoreSession();
 }
 
 async function tryRestoreSession() {
-  const saved = sessionStorage.getItem('reviewer_auth');
+  const saved = localStorage.getItem('reviewer_auth');
   if (!saved) { showScreen('auth'); return; }
 
   try {
@@ -600,7 +600,7 @@ async function tryRestoreSession() {
     const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: { Authorization: 'Bearer ' + token }
     });
-    if (!res.ok) { sessionStorage.removeItem('reviewer_auth'); showScreen('auth'); return; }
+    if (!res.ok) { localStorage.removeItem('reviewer_auth'); showScreen('auth'); return; }
 
     const info = await res.json();
     accessToken = token;
@@ -609,7 +609,7 @@ async function tryRestoreSession() {
     showScreen('loading');
     await loadSheetData();
   } catch (e) {
-    sessionStorage.removeItem('reviewer_auth');
+    localStorage.removeItem('reviewer_auth');
     showScreen('auth');
   }
 }
@@ -645,8 +645,8 @@ async function handleTokenResponse(resp) {
     return;
   }
 
-  // Save to sessionStorage for reload persistence
-  sessionStorage.setItem('reviewer_auth', JSON.stringify({ token: accessToken, email: userEmail }));
+  // Save to localStorage for reload persistence
+  localStorage.setItem('reviewer_auth', JSON.stringify({ token: accessToken, email: userEmail }));
 
   showScreen('loading');
   await loadSheetData();
@@ -656,7 +656,7 @@ function handleSignOut() {
   if (accessToken) {
     google.accounts.oauth2.revoke(accessToken);
   }
-  sessionStorage.removeItem('reviewer_auth');
+  localStorage.removeItem('reviewer_auth');
   accessToken = null;
   userEmail = null;
   headers = [];
@@ -672,7 +672,7 @@ async function sheetsApiGet(range) {
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueRenderOption=FORMATTED_VALUE`;
   const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
   if (res.status === 401) {
-    sessionStorage.removeItem('reviewer_auth');
+    localStorage.removeItem('reviewer_auth');
     showScreen('auth');
     throw new Error('Token expired');
   }
@@ -694,7 +694,7 @@ async function sheetsApiUpdate(range, values) {
     body: JSON.stringify({ range, values }),
   });
   if (res.status === 401) {
-    sessionStorage.removeItem('reviewer_auth');
+    localStorage.removeItem('reviewer_auth');
     showScreen('auth');
     throw new Error('Token expired');
   }
