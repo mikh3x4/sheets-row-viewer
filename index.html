@@ -233,12 +233,14 @@
     background: none;
     border: none;
     cursor: pointer;
-    font-size: 14px;
     color: var(--text-muted);
     padding: 2px 4px;
     border-radius: 4px;
     transition: all 0.15s;
-    margin-left: 6px;
+    margin-left: 4px;
+    vertical-align: middle;
+    display: inline-flex;
+    align-items: center;
   }
   .filter-icon:hover { color: var(--primary); background: #eef2ff; }
   .filter-icon.active { color: var(--primary); background: #eef2ff; }
@@ -1110,7 +1112,7 @@ function renderFieldCard(col, value, rowIdx) {
     <div class="field-header">
       <span>
         <span class="field-label">${escHtml(col.name)}</span>
-        <button class="filter-icon ${filterActive}" onclick="openFilterPopover(${col.index}, this)" title="Filter by this column">&#x25BC;</button>
+        <button class="filter-icon ${filterActive}" onclick="openFilterPopover(${col.index}, this)" title="Filter by this column"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></button>
       </span>
       ${ownerHtml}
     </div>
