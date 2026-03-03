@@ -842,6 +842,7 @@ const EDITABLE_RE = /^(.+?)\s*\[([^\]]+)\]\s*$/;
 
 function parseColumns() {
   columns = headers.map((h, i) => {
+    if (!h || !h.trim()) return null; // skip empty headers
     const m = h.match(EDITABLE_RE);
     if (m) {
       const name = m[1].trim();
@@ -856,7 +857,7 @@ function parseColumns() {
       return { index: i, name, rawHeader: h, type: 'editable-other', ownerEmail: email };
     }
     return { index: i, name: h, rawHeader: h, type: 'readonly', ownerEmail: null };
-  });
+  }).filter(Boolean);
 }
 
 // ============================================================
