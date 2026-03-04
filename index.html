@@ -899,6 +899,7 @@ async function silentRefresh() {
 
 async function loadSettings() {
   try {
+    const oldKey = anthropicApiKey;
     const data = await sheetsApiGet("'row-viewer-settings'!A:B");
     if (data.values) {
       for (const row of data.values) {
@@ -907,6 +908,8 @@ async function loadSettings() {
         }
       }
     }
+    // Re-render if key was just loaded so translate buttons become active
+    if (!oldKey && anthropicApiKey) renderApplicant();
   } catch (e) {
     // Settings tab may not exist — that's fine
   }
