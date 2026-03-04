@@ -1524,19 +1524,43 @@ function parsePdfUrl(val) {
 async function downloadPdfAsBase64(pdfInfo) {
   let pdfBytes;
   if (pdfInfo.type === 'drive') {
-    const dlUrl = `https://www.googleapis.com/drive/v3/files/${pdfInfo.id}?alt=media`;
-    const dlRes = await fetch(dlUrl, { headers: { Authorization: 'Bearer ' + accessToken } });
-    if (!dlRes.ok) throw new Error('Failed to download PDF from Drive (status ' + dlRes.status + '). Make sure the file is accessible.');
+    // Try Google Drive API first, fall back to export link
+    let dlRes;
+    try {
+      dlRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${pdfInfo.id}?alt=media`,
+        { headers: { Authorization: 'Bearer ' + accessToken } }
+      );
+    } catch (e) {
+      // Drive API may not be enabled — try Sheets-scoped export workaround
+      // Use the Google Drive export link which works with any Google auth
+      try {
+        dlRes = await fetch(
+          `https://drive.usercontent.google.com/download?id=${pdfInfo.id}&export=download`,
+          { headers: { Authorization: 'Bearer ' + accessToken }, credentials: 'include' }
+        );
+      } catch (e2) {
+        throw new Error('Cannot download PDF. Enable the Google Drive API in your Cloud Console project, or check that the file is shared with you.');
+      }
+    }
+    if (!dlRes.ok) throw new Error('Failed to download PDF from Drive (status ' + dlRes.status + '). Ensure the Drive API is enabled in your Google Cloud project and the file is accessible.');
     pdfBytes = await dlRes.arrayBuffer();
   } else {
-    const dlRes = await fetch(pdfInfo.url);
-    if (!dlRes.ok) throw new Error('Failed to download PDF');
-    pdfBytes = await dlRes.arrayBuffer();
+    try {
+      const dlRes = await fetch(pdfInfo.url);
+      if (!dlRes.ok) throw new Error('HTTP ' + dlRes.status);
+      pdfBytes = await dlRes.arrayBuffer();
+    } catch (e) {
+      throw new Error('Failed to download PDF: ' + e.message + '. The server may block cross-origin requests.');
+    }
   }
   // Convert to base64
   const bytes = new Uint8Array(pdfBytes);
+  const chunkSize = 8192;
   let binary = '';
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
   return btoa(binary);
 }
 
