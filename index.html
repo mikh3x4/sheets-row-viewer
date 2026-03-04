@@ -559,7 +559,6 @@ var isRefreshing = false; // prevent overlapping refreshes
 
 var anthropicApiKey = null;
 var translationCache = {};  // key: 'colIdx-rowIdx', value: translated text
-var pdfTranslationCache = {}; // key: 'colIdx-rowIdx', value: translated PDF text
 
 // ============================================================
 // INIT
@@ -1358,7 +1357,7 @@ function renderFieldCard(col, value, rowIdx) {
 function renderCellValue(val, colIdx, rowIdx) {
   if (!val) return '<div class="field-value empty">(empty)</div>';
 
-  // Check for cached translation (for plain text fields)
+  // Check for cached translation
   const cacheKey = colIdx + '-' + rowIdx;
   const cachedTranslation = (colIdx != null) ? translationCache[cacheKey] : null;
 
@@ -1372,7 +1371,7 @@ function renderCellValue(val, colIdx, rowIdx) {
     if (driveMatch) {
       const fileId = driveMatch[1];
       html += `<div class="embed-container"><iframe src="https://drive.google.com/file/d/${fileId}/preview" allow="autoplay" loading="lazy"></iframe></div>`;
-      html += renderPdfTranslateButton(colIdx, rowIdx, fileId, 'drive');
+      if (cachedTranslation) html += `<div class="pdf-translate-box"><div class="translation-indicator">Translated PDF content</div>${escHtml(cachedTranslation)}</div>`;
       return html;
     }
 
@@ -1381,14 +1380,14 @@ function renderCellValue(val, colIdx, rowIdx) {
     if (driveOpenMatch) {
       const fileId = driveOpenMatch[1];
       html += `<div class="embed-container"><iframe src="https://drive.google.com/file/d/${fileId}/preview" allow="autoplay" loading="lazy"></iframe></div>`;
-      html += renderPdfTranslateButton(colIdx, rowIdx, fileId, 'drive');
+      if (cachedTranslation) html += `<div class="pdf-translate-box"><div class="translation-indicator">Translated PDF content</div>${escHtml(cachedTranslation)}</div>`;
       return html;
     }
 
     // Direct PDF URL
     if (url.match(/\.pdf(\?|$)/i)) {
       html += `<div class="embed-container"><iframe src="${escAttr(url)}" loading="lazy"></iframe></div>`;
-      html += renderPdfTranslateButton(colIdx, rowIdx, url, 'url');
+      if (cachedTranslation) html += `<div class="pdf-translate-box"><div class="translation-indicator">Translated PDF content</div>${escHtml(cachedTranslation)}</div>`;
       return html;
     }
 
@@ -1400,21 +1399,6 @@ function renderCellValue(val, colIdx, rowIdx) {
     return `<div class="field-value">${escHtml(cachedTranslation)}</div><div class="translation-indicator">Translated from original</div>`;
   }
   return `<div class="field-value">${escHtml(val)}</div>`;
-}
-
-function renderPdfTranslateButton(colIdx, rowIdx, source, sourceType) {
-  if (colIdx == null || rowIdx == null) return '';
-  const cacheKey = colIdx + '-' + rowIdx;
-  const cached = pdfTranslationCache[cacheKey];
-  const disabled = !anthropicApiKey ? 'disabled' : '';
-  const title = !anthropicApiKey ? 'Translation unavailable — no API key configured' : 'Extract text from PDF and translate to English';
-
-  let html = '';
-  if (cached) {
-    html += `<div class="pdf-translate-box"><div class="translation-indicator">Translated PDF text</div>${escHtml(cached)}</div>`;
-  }
-  html += `<div style="margin-top:6px"><button class="translate-btn ${disabled}" onclick="translatePdf(${colIdx}, ${rowIdx}, '${escAttr(source)}', '${sourceType}')" title="${title}" id="pdf-translate-btn-${colIdx}-${rowIdx}">Aᵀ Translate PDF text</button></div>`;
-  return html;
 }
 
 function autoResize(el) {
@@ -1497,7 +1481,11 @@ function colToLetter(col) {
 // ============================================================
 // TRANSLATION
 // ============================================================
-async function callClaude(systemPrompt, userMessage) {
+async function callClaude(systemPrompt, contentBlocks) {
+  // contentBlocks can be a string (plain text) or an array of content blocks
+  const userContent = typeof contentBlocks === 'string'
+    ? contentBlocks
+    : contentBlocks;
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -1510,7 +1498,7 @@ async function callClaude(systemPrompt, userMessage) {
       model: 'claude-sonnet-4-6',
       max_tokens: 4096,
       system: systemPrompt,
-      messages: [{ role: 'user', content: userMessage }],
+      messages: [{ role: 'user', content: userContent }],
     }),
   });
   if (!res.ok) {
@@ -1519,6 +1507,37 @@ async function callClaude(systemPrompt, userMessage) {
   }
   const data = await res.json();
   return data.content[0].text;
+}
+
+// Detect if a value is a PDF URL and extract download info
+function parsePdfUrl(val) {
+  if (!val || !/^https?:\/\//i.test(val.trim())) return null;
+  const url = val.trim();
+  const driveMatch = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (driveMatch) return { type: 'drive', id: driveMatch[1] };
+  const driveOpenMatch = url.match(/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/);
+  if (driveOpenMatch) return { type: 'drive', id: driveOpenMatch[1] };
+  if (url.match(/\.pdf(\?|$)/i)) return { type: 'url', url };
+  return null;
+}
+
+async function downloadPdfAsBase64(pdfInfo) {
+  let pdfBytes;
+  if (pdfInfo.type === 'drive') {
+    const dlUrl = `https://www.googleapis.com/drive/v3/files/${pdfInfo.id}?alt=media`;
+    const dlRes = await fetch(dlUrl, { headers: { Authorization: 'Bearer ' + accessToken } });
+    if (!dlRes.ok) throw new Error('Failed to download PDF from Drive (status ' + dlRes.status + '). Make sure the file is accessible.');
+    pdfBytes = await dlRes.arrayBuffer();
+  } else {
+    const dlRes = await fetch(pdfInfo.url);
+    if (!dlRes.ok) throw new Error('Failed to download PDF');
+    pdfBytes = await dlRes.arrayBuffer();
+  }
+  // Convert to base64
+  const bytes = new Uint8Array(pdfBytes);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
 }
 
 async function translateField(colIdx, rowIdx) {
@@ -1531,7 +1550,6 @@ async function translateField(colIdx, rowIdx) {
     delete translationCache[cacheKey];
     const val = (rows[filteredIndices[currentIndex]]?.[colIdx] || '').toString();
     bodyEl.innerHTML = renderCellValue(val, colIdx, rowIdx);
-    // Update button state
     const btn = bodyEl.closest('.field-card')?.querySelector('.translate-btn');
     if (btn) btn.classList.remove('translated');
     return;
@@ -1541,115 +1559,62 @@ async function translateField(colIdx, rowIdx) {
   const val = (rows[realRowIdx]?.[colIdx] || '').toString();
   if (!val) return;
 
-  // Show loading
-  bodyEl.innerHTML = '<div class="field-value" style="color: var(--text-muted); font-style: italic;">Translating...</div>';
+  const pdfInfo = parsePdfUrl(val);
 
   try {
-    const translated = await callClaude(
-      'Translate the following text to English. If it is already in English, return it unchanged. Only return the translation, nothing else.',
-      val
-    );
-    translationCache[cacheKey] = translated;
-    bodyEl.innerHTML = `<div class="field-value">${escHtml(translated)}</div><div class="translation-indicator">Translated from original</div>`;
-    // Update button state
-    const btn = bodyEl.closest('.field-card')?.querySelector('.translate-btn');
-    if (btn) btn.classList.add('translated');
+    if (pdfInfo) {
+      // PDF: download the file and send as document to Claude
+      bodyEl.querySelector('.pdf-translate-box')?.remove();
+      const statusEl = document.createElement('div');
+      statusEl.className = 'field-value';
+      statusEl.style.cssText = 'color: var(--text-muted); font-style: italic; margin-top: 8px;';
+      statusEl.textContent = 'Downloading PDF...';
+      bodyEl.appendChild(statusEl);
+
+      const base64Data = await downloadPdfAsBase64(pdfInfo);
+      statusEl.textContent = 'Translating PDF...';
+
+      const translated = await callClaude(
+        'Translate the content of this PDF document to English. If it is already in English, return it unchanged. Preserve paragraph structure. Only return the translation, nothing else.',
+        [
+          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64Data } },
+          { type: 'text', text: 'Translate this document to English.' }
+        ]
+      );
+      translationCache[cacheKey] = translated;
+      bodyEl.innerHTML = renderCellValue(val, colIdx, rowIdx);
+      const btn = bodyEl.closest('.field-card')?.querySelector('.translate-btn');
+      if (btn) btn.classList.add('translated');
+    } else {
+      // Plain text translation
+      bodyEl.innerHTML = '<div class="field-value" style="color: var(--text-muted); font-style: italic;">Translating...</div>';
+
+      const translated = await callClaude(
+        'Translate the following text to English. If it is already in English, return it unchanged. Only return the translation, nothing else.',
+        val
+      );
+      translationCache[cacheKey] = translated;
+      bodyEl.innerHTML = `<div class="field-value">${escHtml(translated)}</div><div class="translation-indicator">Translated from original</div>`;
+      const btn = bodyEl.closest('.field-card')?.querySelector('.translate-btn');
+      if (btn) btn.classList.add('translated');
+    }
   } catch (e) {
     console.error('Translation failed:', e);
-    bodyEl.innerHTML = `<div class="field-value" style="color: var(--red);">Translation failed: ${escHtml(e.message)}</div>`;
-    setTimeout(() => {
-      bodyEl.innerHTML = renderCellValue(val, colIdx, rowIdx);
-    }, 3000);
-  }
-}
-
-async function translatePdf(colIdx, rowIdx, source, sourceType) {
-  const cacheKey = colIdx + '-' + rowIdx;
-  const bodyEl = document.getElementById('field-body-' + colIdx + '-' + rowIdx);
-  const btn = document.getElementById('pdf-translate-btn-' + colIdx + '-' + rowIdx);
-  if (!bodyEl || !anthropicApiKey) return;
-
-  // If already translated, toggle off
-  if (pdfTranslationCache[cacheKey]) {
-    delete pdfTranslationCache[cacheKey];
-    const val = (rows[filteredIndices[currentIndex]]?.[colIdx] || '').toString();
-    bodyEl.innerHTML = renderCellValue(val, colIdx, rowIdx);
-    return;
-  }
-
-  if (btn) {
-    btn.textContent = 'Extracting PDF text...';
-    btn.classList.add('disabled');
-  }
-
-  try {
-    // Fetch the PDF binary
-    let pdfBytes;
-    if (sourceType === 'drive') {
-      // Use Google Drive API to download the file content
-      const dlUrl = `https://www.googleapis.com/drive/v3/files/${source}?alt=media`;
-      const dlRes = await fetch(dlUrl, { headers: { Authorization: 'Bearer ' + accessToken } });
-      if (!dlRes.ok) throw new Error('Failed to download PDF from Drive (status ' + dlRes.status + '). Make sure the file is accessible.');
-      pdfBytes = await dlRes.arrayBuffer();
-    } else {
-      const dlRes = await fetch(source);
-      if (!dlRes.ok) throw new Error('Failed to download PDF');
-      pdfBytes = await dlRes.arrayBuffer();
-    }
-
-    if (btn) btn.textContent = 'Translating...';
-
-    // Extract text from PDF using pdf.js
-    await loadPdfJs();
-    const pdf = await pdfjsLib.getDocument({ data: pdfBytes }).promise;
-    let fullText = '';
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      const pageText = content.items.map(item => item.str).join(' ');
-      if (pageText.trim()) fullText += (fullText ? '\n\n' : '') + `--- Page ${i} ---\n` + pageText;
-    }
-
-    if (!fullText.trim()) {
-      throw new Error('No extractable text found in PDF (may be a scanned image).');
-    }
-
-    // Translate the extracted text
-    const translated = await callClaude(
-      'Translate the following text extracted from a PDF to English. If it is already in English, return it unchanged. Preserve paragraph structure. Only return the translation, nothing else.',
-      fullText
-    );
-    pdfTranslationCache[cacheKey] = translated;
-
-    // Re-render the field to show cached translation
-    const val = (rows[filteredIndices[currentIndex]]?.[colIdx] || '').toString();
-    bodyEl.innerHTML = renderCellValue(val, colIdx, rowIdx);
-  } catch (e) {
-    console.error('PDF translation failed:', e);
-    if (btn) {
-      btn.textContent = 'Translation failed: ' + e.message;
-      btn.classList.remove('disabled');
+    const errorHtml = `<div class="field-value" style="color: var(--red); margin-top: 8px;">Translation failed: ${escHtml(e.message)}</div>`;
+    if (pdfInfo) {
+      // For PDFs, keep the embed visible — just append error
+      bodyEl.querySelector('.field-value[style*="italic"]')?.remove();
+      bodyEl.insertAdjacentHTML('beforeend', errorHtml);
       setTimeout(() => {
-        btn.textContent = 'Aᵀ Translate PDF text';
+        bodyEl.querySelector('.field-value[style*="red"]')?.remove();
       }, 4000);
+    } else {
+      bodyEl.innerHTML = errorHtml;
+      setTimeout(() => {
+        bodyEl.innerHTML = renderCellValue(val, colIdx, rowIdx);
+      }, 3000);
     }
   }
-}
-
-var pdfJsLoaded = false;
-function loadPdfJs() {
-  if (pdfJsLoaded) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-    script.onload = () => {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      pdfJsLoaded = true;
-      resolve();
-    };
-    script.onerror = () => reject(new Error('Failed to load PDF.js'));
-    document.head.appendChild(script);
-  });
 }
 
 // ============================================================
