@@ -1339,7 +1339,7 @@ function renderFieldCard(col, value, rowIdx) {
   const isTranslated = translationCache[col.index + '-' + rowIdx];
   const translateClass = isTranslated ? 'translated' : '';
   const translateBtn = showTranslate
-    ? `<button class="translate-btn ${translateDisabled} ${translateClass}" onclick="translateField(${col.index}, ${rowIdx})" title="${translateTitle}">Aᵀ</button>`
+    ? `<button class="translate-btn ${translateDisabled} ${translateClass}" onclick="translateField(${col.index}, ${rowIdx})" title="${translateTitle}"><span style="font-size:11px">文</span>A</button>`
     : '';
 
   return `<div class="field-card ${typeClass} ${compact}">
