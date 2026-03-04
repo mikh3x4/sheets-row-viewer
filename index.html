@@ -1521,40 +1521,26 @@ function parsePdfUrl(val) {
   return null;
 }
 
-async function downloadPdfAsBase64(pdfInfo) {
-  let pdfBytes;
-  if (pdfInfo.type === 'drive') {
-    // Try Google Drive API first, fall back to export link
-    let dlRes;
+async function downloadDrivePdfAsBase64(fileId) {
+  // For Google Drive files: download with auth and send as base64
+  let dlRes;
+  try {
+    dlRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+      { headers: { Authorization: 'Bearer ' + accessToken } }
+    );
+  } catch (e) {
     try {
       dlRes = await fetch(
-        `https://www.googleapis.com/drive/v3/files/${pdfInfo.id}?alt=media`,
-        { headers: { Authorization: 'Bearer ' + accessToken } }
+        `https://drive.usercontent.google.com/download?id=${fileId}&export=download`,
+        { headers: { Authorization: 'Bearer ' + accessToken }, credentials: 'include' }
       );
-    } catch (e) {
-      // Drive API may not be enabled — try Sheets-scoped export workaround
-      // Use the Google Drive export link which works with any Google auth
-      try {
-        dlRes = await fetch(
-          `https://drive.usercontent.google.com/download?id=${pdfInfo.id}&export=download`,
-          { headers: { Authorization: 'Bearer ' + accessToken }, credentials: 'include' }
-        );
-      } catch (e2) {
-        throw new Error('Cannot download PDF. Enable the Google Drive API in your Cloud Console project, or check that the file is shared with you.');
-      }
-    }
-    if (!dlRes.ok) throw new Error('Failed to download PDF from Drive (status ' + dlRes.status + '). Ensure the Drive API is enabled in your Google Cloud project and the file is accessible.');
-    pdfBytes = await dlRes.arrayBuffer();
-  } else {
-    try {
-      const dlRes = await fetch(pdfInfo.url);
-      if (!dlRes.ok) throw new Error('HTTP ' + dlRes.status);
-      pdfBytes = await dlRes.arrayBuffer();
-    } catch (e) {
-      throw new Error('Failed to download PDF: ' + e.message + '. The server may block cross-origin requests.');
+    } catch (e2) {
+      throw new Error('Cannot download PDF. Enable the Google Drive API in your Cloud Console project, or check that the file is shared with you.');
     }
   }
-  // Convert to base64
+  if (!dlRes.ok) throw new Error('Failed to download PDF from Drive (status ' + dlRes.status + '). Ensure the Drive API is enabled in your Google Cloud project and the file is accessible.');
+  const pdfBytes = await dlRes.arrayBuffer();
   const bytes = new Uint8Array(pdfBytes);
   const chunkSize = 8192;
   let binary = '';
@@ -1587,21 +1573,29 @@ async function translateField(colIdx, rowIdx) {
 
   try {
     if (pdfInfo) {
-      // PDF: download the file and send as document to Claude
+      // PDF translation
       bodyEl.querySelector('.pdf-translate-box')?.remove();
       const statusEl = document.createElement('div');
       statusEl.className = 'field-value';
       statusEl.style.cssText = 'color: var(--text-muted); font-style: italic; margin-top: 8px;';
-      statusEl.textContent = 'Downloading PDF...';
       bodyEl.appendChild(statusEl);
 
-      const base64Data = await downloadPdfAsBase64(pdfInfo);
-      statusEl.textContent = 'Translating PDF...';
+      let docSource;
+      if (pdfInfo.type === 'drive') {
+        // Drive files need authenticated download → base64
+        statusEl.textContent = 'Downloading PDF...';
+        const base64Data = await downloadDrivePdfAsBase64(pdfInfo.id);
+        docSource = { type: 'base64', media_type: 'application/pdf', data: base64Data };
+      } else {
+        // Regular URLs: pass URL directly to Claude (their servers fetch it, no CORS issues)
+        docSource = { type: 'url', url: pdfInfo.url };
+      }
 
+      statusEl.textContent = 'Translating PDF...';
       const translated = await callClaude(
         'Translate the content of this PDF document to English. If it is already in English, return it unchanged. Preserve paragraph structure. Only return the translation, nothing else.',
         [
-          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64Data } },
+          { type: 'document', source: docSource },
           { type: 'text', text: 'Translate this document to English.' }
         ]
       );
