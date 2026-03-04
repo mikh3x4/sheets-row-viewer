@@ -461,6 +461,7 @@
       <input class="jump-id-input" id="jump-id-input" type="text" placeholder="Go to ID..." title="Jump to application by ID (Enter to go)" onkeydown="if(event.key==='Enter')handleJumpToId()">
     </div>
     <div class="topbar-right">
+      <button class="icon-btn" onclick="changeSheet()" title="Switch to a different sheet">&#x21c4; Change</button>
       <button class="icon-btn" onclick="openSpreadsheet()" title="Open source spreadsheet">&#x2197; Sheet</button>
       <button class="icon-btn" onclick="refreshData()" title="Refresh data from sheet">&#x21bb; Refresh</button>
       <span class="user-info" id="user-info"></span>
@@ -651,6 +652,14 @@ async function handleTokenResponse(resp) {
 
   showScreen('loading');
   await loadSheetData();
+}
+
+function changeSheet() {
+  // Navigate to the same page without the sheet parameter
+  const url = new URL(window.location);
+  url.searchParams.delete('sheet');
+  url.searchParams.delete('tab');
+  window.location.href = url.toString();
 }
 
 function openSpreadsheet() {
