@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
 <title>Application Reviewer</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -287,7 +288,6 @@
     border: 1px solid #bbf7d0;
     border-radius: var(--radius);
     padding: 12px 14px;
-    white-space: pre-wrap;
     word-break: break-word;
     font-size: 14px;
     line-height: 1.6;
@@ -297,6 +297,23 @@
   .pdf-translate-box .translation-indicator {
     margin-bottom: 6px;
   }
+  .pdf-translate-box h1, .pdf-translate-box h2, .pdf-translate-box h3,
+  .pdf-translate-box h4, .pdf-translate-box h5, .pdf-translate-box h6 {
+    margin: 0.8em 0 0.4em;
+    line-height: 1.3;
+  }
+  .pdf-translate-box h1 { font-size: 1.4em; }
+  .pdf-translate-box h2 { font-size: 1.2em; }
+  .pdf-translate-box h3 { font-size: 1.1em; }
+  .pdf-translate-box p { margin: 0.4em 0; }
+  .pdf-translate-box ul, .pdf-translate-box ol { margin: 0.4em 0; padding-left: 1.5em; }
+  .pdf-translate-box table { border-collapse: collapse; margin: 0.5em 0; width: 100%; }
+  .pdf-translate-box th, .pdf-translate-box td { border: 1px solid #d1d5db; padding: 4px 8px; text-align: left; font-size: 13px; }
+  .pdf-translate-box th { background: #e8f5e9; font-weight: 600; }
+  .pdf-translate-box blockquote { border-left: 3px solid #86efac; margin: 0.4em 0; padding: 0.2em 0.8em; color: var(--text-muted); }
+  .pdf-translate-box code { background: #dcfce7; padding: 1px 4px; border-radius: 3px; font-size: 13px; }
+  .pdf-translate-box pre { background: #dcfce7; padding: 8px; border-radius: 4px; overflow-x: auto; }
+  .pdf-translate-box pre code { background: none; padding: 0; }
 
   .field-value {
     font-size: 15px;
@@ -1371,7 +1388,7 @@ function renderCellValue(val, colIdx, rowIdx) {
     if (driveMatch) {
       const fileId = driveMatch[1];
       html += `<div class="embed-container"><iframe src="https://drive.google.com/file/d/${fileId}/preview" allow="autoplay" loading="lazy"></iframe></div>`;
-      if (cachedTranslation) html += `<div class="pdf-translate-box"><div class="translation-indicator">Translated PDF content</div>${escHtml(cachedTranslation)}</div>`;
+      if (cachedTranslation) html += `<div class="pdf-translate-box"><div class="translation-indicator">Translated PDF content</div>${renderMarkdown(cachedTranslation)}</div>`;
       return html;
     }
 
@@ -1380,14 +1397,14 @@ function renderCellValue(val, colIdx, rowIdx) {
     if (driveOpenMatch) {
       const fileId = driveOpenMatch[1];
       html += `<div class="embed-container"><iframe src="https://drive.google.com/file/d/${fileId}/preview" allow="autoplay" loading="lazy"></iframe></div>`;
-      if (cachedTranslation) html += `<div class="pdf-translate-box"><div class="translation-indicator">Translated PDF content</div>${escHtml(cachedTranslation)}</div>`;
+      if (cachedTranslation) html += `<div class="pdf-translate-box"><div class="translation-indicator">Translated PDF content</div>${renderMarkdown(cachedTranslation)}</div>`;
       return html;
     }
 
     // Direct PDF URL
     if (url.match(/\.pdf(\?|$)/i)) {
       html += `<div class="embed-container"><iframe src="${escAttr(url)}" loading="lazy"></iframe></div>`;
-      if (cachedTranslation) html += `<div class="pdf-translate-box"><div class="translation-indicator">Translated PDF content</div>${escHtml(cachedTranslation)}</div>`;
+      if (cachedTranslation) html += `<div class="pdf-translate-box"><div class="translation-indicator">Translated PDF content</div>${renderMarkdown(cachedTranslation)}</div>`;
       return html;
     }
 
@@ -1638,6 +1655,14 @@ async function translateField(colIdx, rowIdx) {
 // ============================================================
 // UTILITIES
 // ============================================================
+function renderMarkdown(text) {
+  if (typeof marked !== 'undefined') {
+    return marked.parse(text);
+  }
+  // Fallback if marked hasn't loaded
+  return '<div style="white-space:pre-wrap">' + escHtml(text) + '</div>';
+}
+
 function escHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
