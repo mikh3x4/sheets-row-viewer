@@ -1056,7 +1056,7 @@ function updateFilterBar() {
   }
 
   for (const colIdx of activeFilters) {
-    const col = columns[parseInt(colIdx)];
+    const col = columns.find(c => c.index === parseInt(colIdx));
     const filter = filters[colIdx];
     let detail = '';
     if (filter.type === 'search') {
@@ -1096,7 +1096,7 @@ function clearAllFilters() {
 
 function openFilterPopover(colIdx, buttonEl) {
   const pop = document.getElementById('filter-popover');
-  const col = columns[colIdx];
+  const col = columns.find(c => c.index === colIdx);
 
   // Position near button
   const rect = buttonEl.getBoundingClientRect();
