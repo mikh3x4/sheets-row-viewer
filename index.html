@@ -573,6 +573,7 @@ var isWriting = false;
 var sheetTabName = null;  // resolved sheet tab name for writes
 var refreshTimer = null;  // debounce timer for lazy refresh
 var isRefreshing = false; // prevent overlapping refreshes
+var hiddenColumns = new Set(); // column indices hidden in Google Sheets
 
 var anthropicApiKey = null;
 var translationCache = {};  // key: 'colIdx-rowIdx', value: translated text
@@ -794,19 +795,31 @@ async function loadSheetData() {
     // Check for tab name in URL params
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
-    let sheetName;
 
+    // Always fetch metadata (needed for hidden column info)
+    const metaRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets(properties,data(columnMetadata))`,
+      { headers: { Authorization: 'Bearer ' + accessToken } }
+    );
+    if (!metaRes.ok) throw new Error('Failed to fetch spreadsheet metadata');
+    const meta = await metaRes.json();
+
+    let sheetName;
+    let matchedSheet;
     if (tabParam) {
       sheetName = tabParam;
+      matchedSheet = meta.sheets.find(s => s.properties.title === tabParam);
     } else {
-      // Get spreadsheet metadata to find the first sheet name
-      const metaRes = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties`,
-        { headers: { Authorization: 'Bearer ' + accessToken } }
-      );
-      if (!metaRes.ok) throw new Error('Failed to fetch spreadsheet metadata');
-      const meta = await metaRes.json();
-      sheetName = meta.sheets[0].properties.title;
+      matchedSheet = meta.sheets[0];
+      sheetName = matchedSheet.properties.title;
+    }
+
+    // Build set of hidden column indices
+    hiddenColumns = new Set();
+    if (matchedSheet && matchedSheet.data && matchedSheet.data[0] && matchedSheet.data[0].columnMetadata) {
+      matchedSheet.data[0].columnMetadata.forEach((col, i) => {
+        if (col.hiddenByUser) hiddenColumns.add(i);
+      });
     }
 
     sheetTabName = sheetName;
@@ -859,18 +872,31 @@ async function silentRefresh() {
   try {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
-    let sheetName;
 
+    // Always fetch metadata (needed for hidden column info)
+    const metaRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets(properties,data(columnMetadata))`,
+      { headers: { Authorization: 'Bearer ' + accessToken } }
+    );
+    if (!metaRes.ok) { isRefreshing = false; return; }
+    const meta = await metaRes.json();
+
+    let sheetName;
+    let matchedSheet;
     if (tabParam) {
       sheetName = tabParam;
+      matchedSheet = meta.sheets.find(s => s.properties.title === tabParam);
     } else {
-      const metaRes = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties`,
-        { headers: { Authorization: 'Bearer ' + accessToken } }
-      );
-      if (!metaRes.ok) { isRefreshing = false; return; }
-      const meta = await metaRes.json();
-      sheetName = meta.sheets[0].properties.title;
+      matchedSheet = meta.sheets[0];
+      sheetName = matchedSheet.properties.title;
+    }
+
+    // Build set of hidden column indices
+    hiddenColumns = new Set();
+    if (matchedSheet && matchedSheet.data && matchedSheet.data[0] && matchedSheet.data[0].columnMetadata) {
+      matchedSheet.data[0].columnMetadata.forEach((col, i) => {
+        if (col.hiddenByUser) hiddenColumns.add(i);
+      });
     }
     sheetTabName = sheetName;
 
@@ -939,6 +965,7 @@ const EDITABLE_RE = /^(.+?)\s*\[([^\]]+)\]\s*$/;
 function parseColumns() {
   columns = headers.map((h, i) => {
     if (!h || !h.trim()) return null; // skip empty headers
+    if (hiddenColumns.has(i)) return null; // skip columns hidden in Google Sheets
     const m = h.match(EDITABLE_RE);
     if (m) {
       const name = m[1].trim();
